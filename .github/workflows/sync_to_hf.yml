@@ -13,8 +13,10 @@ jobs:
           fetch-depth: 0
           lfs: true
       - name: Push to hub
-        uses: huggingface/spaces-github-action@main
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          hf_token: ${{ secrets.HF_TOKEN }}
-          space_id: adityaulil/DermaScan_AI
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git remote add space https://adityaulil:$HF_TOKEN@huggingface.co/spaces/adityaulil/DermaScan_AI
+          git push --force space main
