@@ -18,5 +18,7 @@ jobs:
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          git remote add space https://adityaulil:$HF_TOKEN@huggingface.co/spaces/adityaulil/DermaScan_AI
+          git config --global credential.helper store
+          echo "https://adityaulil:${HF_TOKEN}@huggingface.co" > ~/.git-credentials
+          git remote add space https://huggingface.co/spaces/adityaulil/DermaScan_AI
           git push --force space main
