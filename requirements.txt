@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-multipart
+jinja2
+opencv-python-headless
+timm
+# Install CPU-only torch to save space on HF Spaces
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
