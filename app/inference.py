@@ -8,12 +8,14 @@ from PIL import Image
 
 def remove_hair(image):
     grayScale = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (17, 17))
+    # Gunakan kernel ukuran 9x9 untuk keseimbangan penghapusan rambut
+    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (9, 9))
     blackhat = cv2.morphologyEx(grayScale, cv2.MORPH_BLACKHAT, kernel)
-    ret, thresh2 = cv2.threshold(blackhat, 15, 255, cv2.THRESH_BINARY)
-    # Reduce dilation to prevent huge mosaic blocks
+    # Naikkan threshold ke 20 agar lebih ketat dalam mendeteksi warna gelap
+    ret, thresh2 = cv2.threshold(blackhat, 20, 255, cv2.THRESH_BINARY)
+    # Dilation secukupnya
     thresh2 = cv2.dilate(thresh2, np.ones((3,3), np.uint8), iterations=1)
-    # Increase inpaint radius slightly for smoother blending
+    # Gunakan algoritma Inpaint Telea kembali agar proses jauh lebih cepat
     dst = cv2.inpaint(image, thresh2, 3, cv2.INPAINT_TELEA)
     return dst
 

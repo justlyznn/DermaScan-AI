@@ -1,0 +1,8 @@
+data/
+notebooks/
+outputs/
+*.txt
+!requirements.txt
+logs_kaggle_running.txt
+__pycache__/
+*.pyc
