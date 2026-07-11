@@ -9,14 +9,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const actionBar = document.getElementById('action-bar');
     const analyzeBtn = document.getElementById('analyze-btn');
-    const modelSelect = document.getElementById('model-select');
     
     const loadingState = document.getElementById('loading-state');
     const resultsSection = document.getElementById('results-section');
     
     const resOriginal = document.getElementById('res-original');
-    const resPreprocessed = document.getElementById('res-preprocessed');
-    const resMask = document.getElementById('res-mask');
     const resGradcam = document.getElementById('res-gradcam');
 
     let currentFile = null;
@@ -57,7 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentFile = file;
         currentSamplePath = null;
         
-        // Remove active state from samples
         sampleImgs.forEach(img => img.classList.remove('border-emerald-500'));
 
         const reader = new FileReader();
@@ -71,7 +67,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Sample Selection ---
     sampleImgs.forEach(img => {
         img.addEventListener('click', () => {
-            // Highlight selected sample
             sampleImgs.forEach(s => s.classList.remove('border-emerald-500'));
             img.classList.add('border-emerald-500');
             
@@ -120,7 +115,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const usePrep = document.getElementById('use-preprocessing');
 
         const formData = new FormData();
-        formData.append('model_type', modelSelect.value);
+        // Always send model_type as 'cbam' (single model)
+        formData.append('model_type', 'cbam');
         if (usePrep) {
             formData.append('use_preprocessing', usePrep.checked);
         }
@@ -144,30 +140,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const data = await response.json();
             
-            const resultsGrid = document.getElementById('results-grid');
-            const preprocessedCard = document.getElementById('preprocessed-card');
-            
-            if (usePrep && usePrep.checked) {
-                preprocessedCard.classList.remove('hidden');
-                resultsGrid.classList.remove('md:grid-cols-3', 'lg:grid-cols-3');
-                resultsGrid.classList.add('md:grid-cols-2', 'lg:grid-cols-4');
-            } else {
-                preprocessedCard.classList.add('hidden');
-                resultsGrid.classList.remove('md:grid-cols-2', 'lg:grid-cols-4');
-                resultsGrid.classList.add('md:grid-cols-3', 'lg:grid-cols-3');
-            }
-            
-            // Render images
+            // Set images on slider
             resOriginal.src = 'data:image/jpeg;base64,' + data.original;
-            resPreprocessed.src = 'data:image/jpeg;base64,' + data.preprocessed;
-            resMask.src = 'data:image/jpeg;base64,' + data.mask;
-            resGradcam.src = 'data:image/jpeg;base64,' + data.gradcam;
+            resGradcam.src  = 'data:image/jpeg;base64,' + data.gradcam;
+
+            // Update preprocessing info panel
+            const infoPrepStatus = document.getElementById('info-prep-status');
+            if (infoPrepStatus) {
+                if (usePrep && usePrep.checked) {
+                    infoPrepStatus.textContent = 'DullRazor + CLAHE Aktif';
+                } else {
+                    infoPrepStatus.textContent = 'Preprocessing Dinonaktifkan';
+                }
+            }
+
+            // Wait for images to load, then init slider
+            await Promise.all([
+                waitForImage(resOriginal),
+                waitForImage(resGradcam)
+            ]);
+
+            initComparisonSlider('slider-gradcam');
 
             // Show results
             loadingState.classList.add('hidden');
             loadingState.classList.remove('flex');
             resultsSection.classList.remove('hidden');
-            actionBar.classList.remove('hidden'); // allow re-run with different model
+            actionBar.classList.remove('hidden');
 
         } catch (error) {
             alert('Error: ' + error.message);
@@ -176,4 +175,46 @@ document.addEventListener('DOMContentLoaded', () => {
             actionBar.classList.remove('hidden');
         }
     });
+
+    // --- Helper: wait for image to load ---
+    function waitForImage(imgEl) {
+        return new Promise((resolve) => {
+            if (imgEl.complete && imgEl.naturalWidth > 0) {
+                resolve();
+            } else {
+                imgEl.onload = () => resolve();
+                imgEl.onerror = () => resolve(); // resolve anyway on error
+            }
+        });
+    }
+
+    // --- Before/After Comparison Slider logic ---
+    function initComparisonSlider(wrapperId) {
+        const wrapper = document.getElementById(wrapperId);
+        if (!wrapper) return;
+
+        const afterEl  = wrapper.querySelector('.comparison-after');
+        const handleEl = wrapper.querySelector('.comparison-handle');
+        const rangeEl  = wrapper.querySelector('.comparison-range');
+
+        // Reset to 50%
+        rangeEl.value = 50;
+        setSliderPosition(50, afterEl, handleEl);
+
+        // Remove previous listener if any (re-init on repeated runs)
+        const newRange = rangeEl.cloneNode(true);
+        rangeEl.parentNode.replaceChild(newRange, rangeEl);
+
+        newRange.addEventListener('input', (e) => {
+            const pct = parseFloat(e.target.value);
+            setSliderPosition(pct, afterEl, handleEl);
+        });
+    }
+
+    function setSliderPosition(pct, afterEl, handleEl) {
+        // Clip the "after" image: reveal from right
+        afterEl.style.clipPath = `inset(0 0 0 ${pct}%)`;
+        // Move the handle
+        handleEl.style.left = `${pct}%`;
+    }
 });

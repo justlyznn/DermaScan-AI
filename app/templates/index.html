@@ -33,7 +33,7 @@
                 Sistem analisis dermatologis tingkat lanjut yang dirancang untuk mendukung profesional medis dalam mendeteksi dan memantau perkembangan lesi kulit dengan presisi tinggi.
             </p>
             <p class="text-emerald-600 font-medium max-w-2xl mx-auto">
-                Unggah gambar dermatoskopi untuk memperoleh segmentasi lesi secara otomatis menggunakan arsitektur ResUNet dan CBAM ResUNet yang telah divalidasi.
+                Unggah gambar dermatoskopi untuk memperoleh segmentasi lesi secara otomatis menggunakan arsitektur <strong>CBAM ResUNet</strong> yang telah divalidasi.
             </p>
         </div>
 
@@ -49,7 +49,7 @@
                         <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
                             <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
                         </div>
-                        <h3 class="text-lg font-semibold text-slate-700 mb-1">Klik atau Drag & Drop gambar di sini</h3>
+                        <h3 class="text-lg font-semibold text-slate-700 mb-1">Klik atau Drag &amp; Drop gambar di sini</h3>
                         <p class="text-sm text-slate-400 italic">catatan : Pastikan gambar berupa citra dermatoskopi yang jelas.</p>
                     </div>
                     <img id="preview-image" src="" alt="Preview" class="hidden max-h-[250px] rounded-lg shadow-sm">
@@ -82,15 +82,15 @@
                     <div class="flex gap-4">
                         <div class="text-emerald-600 mt-1"><i class="fa-solid fa-database"></i></div>
                         <div>
-                            <h4 class="font-bold text-slate-700 text-sm mb-1">Validasi & Dataset</h4>
+                            <h4 class="font-bold text-slate-700 text-sm mb-1">Validasi &amp; Dataset</h4>
                             <p class="text-xs text-slate-500 leading-relaxed">Model dilatih dan diuji menggunakan dataset internasional dari <strong>ISIC Challenge 2018 (Task 1: Lesion Boundary Segmentation)</strong>, mencapai performa segmentasi yang tangguh.</p>
                         </div>
                     </div>
                     <div class="flex gap-4">
                         <div class="text-emerald-600 mt-1"><i class="fa-solid fa-microchip"></i></div>
                         <div>
-                            <h4 class="font-bold text-slate-700 text-sm mb-1">Arsitektur AI Ganda</h4>
-                            <p class="text-xs text-slate-500 leading-relaxed">Menyediakan dua model tangguh: <strong>ResUNet</strong> standar dan <strong>CBAM ResUNet</strong> (dilengkapi modul <em>attention</em> untuk menajamkan deteksi tepi lesi).</p>
+                            <h4 class="font-bold text-slate-700 text-sm mb-1">Arsitektur CBAM ResUNet</h4>
+                            <p class="text-xs text-slate-500 leading-relaxed">Menggunakan model <strong>CBAM ResUNet</strong> yang dilengkapi modul <em>Convolutional Block Attention</em> untuk menajamkan deteksi tepi lesi dengan presisi tinggi.</p>
                         </div>
                     </div>
                     <div class="flex gap-4">
@@ -113,18 +113,19 @@
 
         <!-- Action Bar (Hidden until image selected) -->
         <div id="action-bar" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-12 flex flex-col md:flex-row items-center justify-between gap-4 transition-all">
-            <div class="w-full md:w-2/3 flex flex-col md:flex-row items-center gap-4">
-                <label class="text-sm font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">PILIH MODEL</label>
-                <select id="model-select" class="w-full bg-slate-50 border border-slate-300 text-slate-700 rounded-lg py-2.5 px-4 focus:ring-emerald-500 focus:border-emerald-500 block">
-                    <option value="cbam" selected>ResUNet + CBAM (Rekomendasi)</option>
-                    <option value="resunet">ResUNet Standard</option>
-                </select>
-                <label class="flex items-center gap-2 text-sm font-semibold text-slate-600 whitespace-nowrap cursor-pointer md:ml-2">
+            <div class="w-full md:w-auto flex items-center gap-4">
+                <!-- Model badge: hanya CBAM -->
+                <div class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2.5">
+                    <i class="fa-solid fa-microchip text-emerald-600"></i>
+                    <span class="text-sm font-semibold text-emerald-700">CBAM ResUNet</span>
+                    <span class="text-xs bg-emerald-600 text-white rounded-full px-2 py-0.5 ml-1">Aktif</span>
+                </div>
+                <label class="flex items-center gap-2 text-sm font-semibold text-slate-600 whitespace-nowrap cursor-pointer">
                     <input type="checkbox" id="use-preprocessing" class="w-5 h-5 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500" checked>
                     Adaptive Preprocessing
                 </label>
             </div>
-            <button id="analyze-btn" class="w-full md:w-1/3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg px-8 py-2.5 flex items-center justify-center gap-2 transition shadow-md">
+            <button id="analyze-btn" class="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg px-8 py-2.5 flex items-center justify-center gap-2 transition shadow-md">
                 <i class="fa-solid fa-play"></i>
                 Mulai Analisis
             </button>
@@ -144,52 +145,99 @@
         <div id="results-section" class="hidden transition-opacity duration-500">
             <div class="flex items-center justify-between mb-6">
                 <h2 class="text-2xl font-bold text-slate-800">Hasil Analisis</h2>
+                <span class="text-xs text-slate-400 bg-slate-100 rounded-full px-3 py-1">
+                    <i class="fa-solid fa-arrows-left-right mr-1"></i> Geser slider untuk membandingkan
+                </span>
             </div>
             
-            <div id="results-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <!-- Card 1 -->
-                <div class="group bg-white rounded-xl shadow-sm border-2 border-transparent hover:border-emerald-400 overflow-hidden result-card transform transition hover:scale-[1.02]">
-                    <div class="bg-slate-50 group-hover:bg-emerald-50 border-b border-slate-200 group-hover:border-emerald-200 py-3 px-4 flex justify-between items-center transition-colors">
-                        <h3 class="text-xs font-bold text-slate-500 group-hover:text-emerald-700 uppercase tracking-wider transition-colors">CITRA ASLI</h3>
-                        <i class="fa-solid fa-camera text-slate-400 group-hover:text-emerald-500 transition-colors"></i>
+            <!-- Two-column slider layout -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                <!-- Slider 1: Raw Input vs Grad-CAM -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-slate-50 border-b border-slate-200 py-3 px-5 flex justify-between items-center">
+                        <div>
+                            <h3 class="text-xs font-bold text-slate-600 uppercase tracking-wider">Before &amp; After: Grad-CAM</h3>
+                            <p class="text-xs text-slate-400 mt-0.5">Geser untuk melihat heatmap Grad-CAM</p>
+                        </div>
+                        <i class="fa-solid fa-fire text-orange-400"></i>
                     </div>
-                    <div class="p-4 bg-slate-100 aspect-square flex items-center justify-center">
-                        <img id="res-original" src="" class="max-w-full max-h-full rounded shadow-sm object-contain">
+                    <div class="p-4">
+                        <!-- Slider labels -->
+                        <div class="flex justify-between text-xs font-semibold mb-2">
+                            <span class="text-slate-500"><i class="fa-solid fa-image mr-1"></i>Citra Input</span>
+                            <span class="text-orange-500"><i class="fa-solid fa-fire mr-1"></i>Grad-CAM</span>
+                        </div>
+                        <!-- Comparison container -->
+                        <div class="comparison-slider-wrapper" id="slider-gradcam">
+                            <div class="comparison-before">
+                                <img id="res-original" src="" alt="Citra Asli">
+                            </div>
+                            <div class="comparison-after">
+                                <img id="res-gradcam" src="" alt="Grad-CAM Heatmap">
+                            </div>
+                            <div class="comparison-handle">
+                                <div class="comparison-handle-line"></div>
+                                <div class="comparison-handle-circle">
+                                    <i class="fa-solid fa-arrows-left-right text-white text-xs"></i>
+                                </div>
+                                <div class="comparison-handle-line"></div>
+                            </div>
+                            <input type="range" class="comparison-range" min="0" max="100" value="50" aria-label="Slider perbandingan Grad-CAM">
+                        </div>
                     </div>
                 </div>
 
-                <!-- Card 2 -->
-                <div id="preprocessed-card" class="group bg-white rounded-xl shadow-sm border-2 border-transparent hover:border-emerald-400 overflow-hidden result-card transform transition hover:scale-[1.02]">
-                    <div class="bg-slate-50 group-hover:bg-emerald-50 border-b border-slate-200 group-hover:border-emerald-200 py-3 px-4 flex justify-between items-center transition-colors">
-                        <h3 class="text-xs font-bold text-slate-500 group-hover:text-emerald-700 uppercase tracking-wider transition-colors">HASIL PREPROCESSING</h3>
-                        <i class="fa-solid fa-wand-magic-sparkles text-slate-400 group-hover:text-emerald-500 transition-colors"></i>
+                <!-- Info Panel -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-slate-50 border-b border-slate-200 py-3 px-5 flex justify-between items-center">
+                        <div>
+                            <h3 class="text-xs font-bold text-slate-600 uppercase tracking-wider">Ringkasan Analisis</h3>
+                            <p class="text-xs text-slate-400 mt-0.5">Detail hasil pemrosesan AI</p>
+                        </div>
+                        <i class="fa-solid fa-chart-bar text-emerald-500"></i>
                     </div>
-                    <div class="p-4 bg-slate-100 aspect-square flex items-center justify-center">
-                        <img id="res-preprocessed" src="" class="max-w-full max-h-full rounded shadow-sm object-contain">
+                    <div class="p-5 flex flex-col gap-4">
+                        <!-- Model badge -->
+                        <div class="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                            <div class="w-9 h-9 bg-emerald-600 rounded-full flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-microchip text-white text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs text-emerald-600 font-semibold uppercase tracking-wider">Model Aktif</p>
+                                <p class="text-sm font-bold text-slate-700">CBAM ResUNet</p>
+                            </div>
+                        </div>
+                        <!-- Preprocessing badge -->
+                        <div id="info-preprocessing" class="flex items-center gap-3 p-3 bg-teal-50 rounded-lg border border-teal-100">
+                            <div class="w-9 h-9 bg-teal-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-wand-magic-sparkles text-white text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs text-teal-600 font-semibold uppercase tracking-wider">Preprocessing</p>
+                                <p class="text-sm font-bold text-slate-700" id="info-prep-status">DullRazor + CLAHE Aktif</p>
+                            </div>
+                        </div>
+                        <!-- Dataset info -->
+                        <div class="flex items-center gap-3 p-3 bg-purple-50 rounded-lg border border-purple-100">
+                            <div class="w-9 h-9 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-database text-white text-sm"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs text-purple-600 font-semibold uppercase tracking-wider">Dataset Pelatihan</p>
+                                <p class="text-sm font-bold text-slate-700">ISIC Challenge 2018</p>
+                            </div>
+                        </div>
+                        <!-- Grad-CAM explanation -->
+                        <div class="mt-2 p-4 bg-amber-50 border border-amber-100 rounded-lg">
+                            <p class="text-xs font-bold text-amber-700 mb-1"><i class="fa-solid fa-lightbulb mr-1"></i>Cara Membaca Grad-CAM</p>
+                            <p class="text-xs text-amber-600 leading-relaxed">
+                                Warna <strong>merah/kuning</strong> menunjukkan area yang paling diperhatikan model saat melakukan segmentasi. Semakin terang warnanya, semakin besar kontribusi area tersebut dalam pengambilan keputusan AI.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Card 2 -->
-                <div class="group bg-white rounded-xl shadow-sm border-2 border-transparent hover:border-emerald-400 overflow-hidden result-card transform transition hover:scale-[1.02]">
-                    <div class="bg-slate-50 group-hover:bg-emerald-50 border-b border-slate-200 group-hover:border-emerald-200 py-3 px-4 flex justify-between items-center transition-colors">
-                        <h3 class="text-xs font-bold text-slate-500 group-hover:text-emerald-700 uppercase tracking-wider transition-colors">PREDIKSI SEGMENTASI</h3>
-                        <i class="fa-solid fa-layer-group text-slate-400 group-hover:text-emerald-500 transition-colors"></i>
-                    </div>
-                    <div class="p-4 bg-slate-100 aspect-square flex items-center justify-center">
-                        <img id="res-mask" src="" class="max-w-full max-h-full rounded shadow-sm object-contain bg-black">
-                    </div>
-                </div>
-
-                <!-- Card 3 -->
-                <div class="group bg-white rounded-xl shadow-sm border-2 border-transparent hover:border-emerald-400 overflow-hidden result-card transform transition hover:scale-[1.02]">
-                    <div class="bg-slate-50 group-hover:bg-emerald-50 border-b border-slate-200 group-hover:border-emerald-200 py-3 px-4 flex justify-between items-center transition-colors">
-                        <h3 class="text-xs font-bold text-slate-500 group-hover:text-emerald-700 uppercase tracking-wider transition-colors">GRAD-CAM HEATMAP</h3>
-                        <i class="fa-solid fa-fire text-slate-400 group-hover:text-orange-400 transition-colors"></i>
-                    </div>
-                    <div class="p-4 bg-slate-100 aspect-square flex items-center justify-center">
-                        <img id="res-gradcam" src="" class="max-w-full max-h-full rounded shadow-sm object-contain">
-                    </div>
-                </div>
             </div>
 
             <!-- Medical Disclaimer -->
