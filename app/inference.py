@@ -61,90 +61,108 @@ def preprocess_image_pipeline(image_bytes, use_preprocessing=True):
     
     return orig_resized, img_tensor, img_final
 
-class SegmentationGradCAM:
-    def __init__(self, model, target_layer):
-        self.model = model
-        self.target_layer = target_layer
-        self.gradients = None
-        self.activations = None
-        
-        target_layer.register_forward_hook(self.save_activation)
-        target_layer.register_backward_hook(self.save_gradient)
 
-    def save_activation(self, module, input, output):
-        self.activations = output
+def compute_gradcam(model, input_tensor, target_layer):
+    """
+    Compute Grad-CAM using register_full_backward_hook (non-deprecated).
+    Returns a normalized heatmap (H x W) in [0, 1].
+    """
+    activations = {}
+    gradients = {}
 
-    def save_gradient(self, module, grad_input, grad_output):
-        self.gradients = grad_output[0]
+    # Use the modern, non-deprecated hook API
+    def fwd_hook(module, inp, out):
+        activations['feat'] = out.detach()
 
-    def generate(self, input_tensor):
-        self.model.eval()
-        self.model.zero_grad()
-        
-        output = self.model(input_tensor)
+    def bwd_hook(module, grad_in, grad_out):
+        gradients['feat'] = grad_out[0].detach()
+
+    fwd_handle = target_layer.register_forward_hook(fwd_hook)
+    bwd_handle = target_layer.register_full_backward_hook(bwd_hook)
+
+    try:
+        model.eval()
+        model.zero_grad()
+
+        # Single forward + backward pass (gradient-enabled)
+        output = model(input_tensor)
         score = output.sum()
         score.backward()
-        
-        gradients = self.gradients.data.cpu().numpy()[0]
-        activations = self.activations.data.cpu().numpy()[0]
-        
-        weights = np.mean(gradients, axis=(1, 2))
-        cam = np.zeros(activations.shape[1:], dtype=np.float32)
-        
+
+        grads = gradients['feat'].cpu().numpy()[0]       # (C, H, W)
+        acts  = activations['feat'].cpu().numpy()[0]     # (C, H, W)
+
+        # Global Average Pooling on gradients → per-channel weight
+        weights = np.mean(grads, axis=(1, 2))            # (C,)
+
+        # Weighted combination of activations
+        cam = np.zeros(acts.shape[1:], dtype=np.float32) # (H, W)
         for i, w in enumerate(weights):
-            cam += w * activations[i]
-            
+            cam += w * acts[i]
+
         cam = np.maximum(cam, 0)
         cam = cv2.resize(cam, (input_tensor.shape[3], input_tensor.shape[2]))
         cam = cam - np.min(cam)
         cam = cam / (np.max(cam) + 1e-8)
-        
-        return cam, output
+
+        # Also get the final output prediction (no grad needed now)
+        with torch.no_grad():
+            output_final = model(input_tensor)
+
+        return cam, output_final
+
+    finally:
+        # Always remove hooks to avoid memory leaks across requests
+        fwd_handle.remove()
+        bwd_handle.remove()
+        model.zero_grad()
+
 
 def tensor_to_base64(img_np):
     img_pil = Image.fromarray(img_np.astype('uint8'))
     buffered = BytesIO()
-    img_pil.save(buffered, format="JPEG")
+    img_pil.save(buffered, format="JPEG", quality=85)
     return base64.b64encode(buffered.getvalue()).decode()
+
 
 def process_inference(model, input_tensor, orig_image, preprocessed_image):
     model.eval()
     
-    # Forward pass
-    with torch.no_grad():
-        output = model(input_tensor)
-        
-    # Set up GradCAM depending on model type
-    # For ResUNet, usually target the last decoder or bridge. Let's use decoder1's final conv block
-    # For CBAMResUNet, we target decoder1's cbam or conv block
+    # Identify the Grad-CAM target layer
     if hasattr(model, 'decoder1'):
         if hasattr(model.decoder1, 'cbam'):
-            target = model.decoder1.cbam # CBAM block
+            target = model.decoder1.cbam   # CBAM attention block
         else:
-            target = model.decoder1.conv_block # Normal ResUNet
+            target = model.decoder1.conv_block  # Standard ResUNet
     else:
-        target = list(model.children())[-2] # Fallback
-        
-    grad_cam = SegmentationGradCAM(model, target)
-    cam, output = grad_cam.generate(input_tensor)
-    
+        # Fallback: last conv-like layer before the output head
+        children = list(model.children())
+        target = children[-2] if len(children) >= 2 else children[-1]
+
+    # Compute Grad-CAM + get prediction in a single pass
+    cam, output = compute_gradcam(model, input_tensor, target)
+
     # Prediction mask
     pred = output.squeeze().detach().cpu().numpy()
     pred_mask = (pred > 0.5).astype(np.uint8) * 255
     
-    # Post-Processing: Morfologi untuk menghaluskan tepi yang bergerigi (Smooth edges)
+    # Post-Processing: Morfologi untuk menghaluskan tepi
     kernel = np.ones((7, 7), np.uint8)
-    pred_mask = cv2.morphologyEx(pred_mask, cv2.MORPH_CLOSE, kernel) # Menutup lubang-lubang kecil di dalam
-    pred_mask = cv2.morphologyEx(pred_mask, cv2.MORPH_OPEN, kernel)  # Menghilangkan noise bintik di luar dan merapikan tepi
-    
+    pred_mask = cv2.morphologyEx(pred_mask, cv2.MORPH_CLOSE, kernel)
+    pred_mask = cv2.morphologyEx(pred_mask, cv2.MORPH_OPEN, kernel)
     
     # Blend Mask
     mask_colored = np.zeros_like(orig_image)
-    mask_colored[pred_mask == 255] = [255, 255, 255] # White mask
+    mask_colored[pred_mask == 255] = [255, 255, 255]
     
     # Blend Grad-CAM
     heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
     cam_blended = cv2.addWeighted(orig_image, 0.5, heatmap, 0.5, 0)
     
-    return tensor_to_base64(orig_image), tensor_to_base64(preprocessed_image), tensor_to_base64(mask_colored), tensor_to_base64(cam_blended)
+    return (
+        tensor_to_base64(orig_image),
+        tensor_to_base64(preprocessed_image),
+        tensor_to_base64(mask_colored),
+        tensor_to_base64(cam_blended)
+    )

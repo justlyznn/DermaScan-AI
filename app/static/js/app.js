@@ -127,15 +127,25 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('sample_path', currentSamplePath);
         }
 
+        // AbortController: timeout 180 detik (CPU inference bisa lambat di HF)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000);
+
         try {
             const response = await fetch('/analyze', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.detail || 'Terjadi kesalahan pada server');
+                let errMsg = 'Terjadi kesalahan pada server';
+                try {
+                    const err = await response.json();
+                    errMsg = err.detail || errMsg;
+                } catch (_) {}
+                throw new Error(`[${response.status}] ${errMsg}`);
             }
 
             const data = await response.json();
@@ -169,10 +179,16 @@ document.addEventListener('DOMContentLoaded', () => {
             actionBar.classList.remove('hidden');
 
         } catch (error) {
-            alert('Error: ' + error.message);
+            clearTimeout(timeoutId);
             loadingState.classList.add('hidden');
             loadingState.classList.remove('flex');
             actionBar.classList.remove('hidden');
+
+            if (error.name === 'AbortError') {
+                showErrorBanner('⏱️ Request timeout: Proses analisis terlalu lama. Silakan coba lagi.');
+            } else {
+                showErrorBanner('❌ Error: ' + error.message);
+            }
         }
     });
 
@@ -216,5 +232,25 @@ document.addEventListener('DOMContentLoaded', () => {
         afterEl.style.clipPath = `inset(0 0 0 ${pct}%)`;
         // Move the handle
         handleEl.style.left = `${pct}%`;
+    }
+
+    // --- Error Banner ---
+    function showErrorBanner(message) {
+        // Remove existing banner if any
+        const existing = document.getElementById('error-banner');
+        if (existing) existing.remove();
+
+        const banner = document.createElement('div');
+        banner.id = 'error-banner';
+        banner.className = 'fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white text-sm font-semibold rounded-xl px-6 py-4 shadow-2xl flex items-center gap-3 max-w-md w-full mx-4';
+        banner.innerHTML = `
+            <i class="fa-solid fa-circle-exclamation text-lg flex-shrink-0"></i>
+            <span class="flex-1">${message}</span>
+            <button onclick="this.parentElement.remove()" class="text-white/70 hover:text-white ml-2 flex-shrink-0"><i class="fa-solid fa-xmark"></i></button>
+        `;
+        document.body.appendChild(banner);
+
+        // Auto-dismiss after 8 seconds
+        setTimeout(() => { if (banner.parentElement) banner.remove(); }, 8000);
     }
 });
