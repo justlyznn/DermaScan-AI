@@ -53,50 +53,6 @@ def preprocess_image_pipeline(image_bytes, use_preprocessing=True):
     return orig_resized, img_tensor, img_final
 
 
-def compute_activation_heatmap(model, input_tensor, target_layer):
-    """
-    Fast activation-based heatmap using ONLY a forward pass.
-    No backward pass / no gradients needed → very fast on CPU.
-    
-    Strategy: capture intermediate feature activations, average across
-    channels, and use the mean activation map as the heatmap.
-    This shows where the model is most 'active' in its decision.
-    """
-    captured = {}
-
-    def fwd_hook(module, inp, out):
-        # Detach immediately to avoid holding computation graph
-        captured['feat'] = out.detach()
-
-    handle = target_layer.register_forward_hook(fwd_hook)
-
-    try:
-        with torch.no_grad():
-            output = model(input_tensor)
-
-        # Average across channels → (H, W)
-        feat = captured['feat'].cpu().numpy()[0]  # (C, H, W)
-        cam  = np.mean(feat, axis=0)              # (H, W)
-
-        # ReLU — keep only positive activations
-        cam = np.maximum(cam, 0)
-
-        H, W = input_tensor.shape[2], input_tensor.shape[3]
-        cam = cv2.resize(cam, (W, H))
-
-        # Normalize to [0, 1]
-        cam_min, cam_max = cam.min(), cam.max()
-        if cam_max - cam_min > 1e-8:
-            cam = (cam - cam_min) / (cam_max - cam_min)
-        else:
-            cam = np.zeros_like(cam)
-
-        return cam, output
-
-    finally:
-        handle.remove()
-
-
 def tensor_to_base64(img_np):
     img_pil = Image.fromarray(img_np.astype('uint8'))
     buffered = BytesIO()
@@ -107,36 +63,32 @@ def tensor_to_base64(img_np):
 def process_inference(model, input_tensor, orig_image, preprocessed_image):
     model.eval()
 
-    # Pick the target layer for activation heatmap
-    if hasattr(model, 'decoder1'):
-        if hasattr(model.decoder1, 'cbam'):
-            target = model.decoder1.cbam       # CBAM attention block
-        else:
-            target = model.decoder1.conv_block  # Standard ResUNet
-    else:
-        children = list(model.children())
-        target = children[-2] if len(children) >= 2 else children[-1]
+    # Single forward pass — no hooks, no backward, no extras
+    with torch.no_grad():
+        output = model(input_tensor)  # shape: (1, 1, H, W), values in [0,1]
 
-    # Fast activation heatmap (forward-only, no backward)
-    cam, output = compute_activation_heatmap(model, input_tensor, target)
+    # ── Prediction mask ──────────────────────────────────────────
+    prob_map = output.squeeze().cpu().numpy()          # (H, W), float [0,1]
+    pred_mask = (prob_map > 0.5).astype(np.uint8) * 255
 
-    # Prediction mask from model output
-    pred = output.squeeze().detach().cpu().numpy()
-    pred_mask = (pred > 0.5).astype(np.uint8) * 255
-
-    # Morphological post-processing for smooth edges
+    # Morphological cleanup for smooth edges
     kernel = np.ones((7, 7), np.uint8)
     pred_mask = cv2.morphologyEx(pred_mask, cv2.MORPH_CLOSE, kernel)
     pred_mask = cv2.morphologyEx(pred_mask, cv2.MORPH_OPEN, kernel)
 
-    # Blend Mask (white on black)
-    mask_colored = np.zeros_like(orig_image)
-    mask_colored[pred_mask == 255] = [255, 255, 255]
+    # ── Probability Heatmap (replaces Grad-CAM) ──────────────────
+    # The model output IS the probability of lesion per pixel.
+    # No extra computation needed — fastest & most accurate visualization.
+    H, W = orig_image.shape[:2]
+    cam = cv2.resize(prob_map, (W, H))  # rescale to display size if needed
 
-    # Blend heatmap with original image (JET colormap)
     heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
     cam_blended = cv2.addWeighted(orig_image, 0.5, heatmap, 0.5, 0)
+
+    # ── Mask overlay ─────────────────────────────────────────────
+    mask_colored = np.zeros_like(orig_image)
+    mask_colored[pred_mask == 255] = [255, 255, 255]
 
     return (
         tensor_to_base64(orig_image),
